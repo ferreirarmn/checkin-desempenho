@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Reuniões de Acompanhamento</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#eaf1ef; --surface:#ffffff; --surface-2:#f3f7f5;
+    --ink:#14302c; --muted:#5c6f6b;
+    --line:#d7e2df; --line-strong:#c3d3cf;
+    --teal:#0f5a54; --teal-700:#0b453f; --teal-100:#dcefec;
+    --green:#3f7d5f; --green-100:#e2f0e7;
+    --amber:#b9761f; --amber-100:#f6ecd8;
+    --red:#a23a34; --red-100:#f5e2e0;
+    --blue:#3a6591; --blue-100:#e3ecf4;
+    --shadow:0 1px 2px rgba(20,48,44,.06), 0 6px 20px rgba(20,48,44,.06);
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,"Helvetica Neue",Arial,sans-serif;
+    font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;}
+  a{color:var(--teal);text-decoration:none}
+  button{font-family:inherit}
+  .app{max-width:1080px;margin:0 auto;padding:0 16px 64px}
+  .topbar{position:sticky;top:0;z-index:20;background:var(--bg);padding:14px 0 10px;border-bottom:1px solid var(--line)}
+  .topbar-in{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:650;letter-spacing:-.01em}
+  .brand .dot{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block}
+  .brand small{display:block;font-weight:450;color:var(--muted);font-size:11.5px;letter-spacing:0}
+  .who{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .who .name{font-weight:600;font-size:13.5px}
+  .who .name span{display:block;font-weight:450;color:var(--muted);font-size:11.5px}
+  nav.tabs{display:flex;gap:2px;flex-wrap:wrap;margin-top:10px}
+  nav.tabs button{border:0;background:transparent;color:var(--muted);cursor:pointer;padding:8px 12px;border-radius:9px;font-size:13.5px;font-weight:550}
+  nav.tabs button:hover{background:var(--surface-2);color:var(--ink)}
+  nav.tabs button.active{background:var(--teal);color:#fff}
+  .btn{border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);cursor:pointer;padding:9px 14px;border-radius:10px;font-size:13.5px;font-weight:560;display:inline-flex;align-items:center;gap:7px}
+  .btn:hover{border-color:var(--teal);color:var(--teal)}
+  .btn.primary{background:var(--teal);border-color:var(--teal);color:#fff}
+  .btn.primary:hover{background:var(--teal-700);color:#fff}
+  .btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+  .btn.ghost:hover{background:var(--surface-2);color:var(--ink)}
+  .btn.sm{padding:6px 10px;font-size:12.5px;border-radius:8px}
+  .btn.danger:hover{border-color:var(--red);color:var(--red)}
+  .btn:disabled{opacity:.5;cursor:not-allowed}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow)}
+  .pad{padding:20px}
+  .grid{display:grid;gap:14px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .spread{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:22px;letter-spacing:-.02em;margin:22px 0 4px}
+  h2{font-size:16.5px;letter-spacing:-.01em;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:13.5px;margin:0}
+  .section-title{font-size:12.5px;font-weight:650;color:var(--muted);margin:26px 0 10px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+  .chip.teal{background:var(--teal-100);color:var(--teal-700);border-color:transparent}
+  .chip.green{background:var(--green-100);color:#2c5c44;border-color:transparent}
+  .chip.amber{background:var(--amber-100);color:#8a5613;border-color:transparent}
+  .chip.red{background:var(--red-100);color:#7e2a25;border-color:transparent}
+  .chip.blue{background:var(--blue-100);color:#2f4f74;border-color:transparent}
+  label.f{display:block;font-size:13px;font-weight:600;margin:0 0 6px}
+  .hint{color:var(--muted);font-weight:450;font-size:12px}
+  input[type=text],input[type=email],input[type=date],input[type=file],select,textarea{
+    width:100%;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);
+    border-radius:10px;padding:10px 12px;font-family:inherit;font-size:14px;outline:none}
+  textarea{resize:vertical;min-height:84px;line-height:1.5}
+  input:focus,select:focus,textarea:focus{border-color:var(--teal);box-shadow:0 0 0 3px rgba(15,90,84,.12)}
+  .field{margin-bottom:16px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:640px){.two{grid-template-columns:1fr}}
+  .q{display:grid;grid-template-columns:34px 1fr;gap:14px;margin-bottom:18px;align-items:start}
+  .q .num{width:34px;height:34px;border-radius:10px;background:var(--teal-100);color:var(--teal-700);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px}
+  .q .qt{font-size:15.5px;font-weight:600;margin:6px 0 8px;letter-spacing:-.01em}
+  .need{border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-bottom:10px;background:var(--surface-2)}
+  .need .top{display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:8px}
+  .empty{border:1px dashed var(--line-strong);border-radius:12px;padding:34px;text-align:center;color:var(--muted)}
+  .empty b{display:block;color:var(--ink);font-weight:600;margin-bottom:4px}
+  .list{display:grid;gap:10px}
+  .item{display:flex;justify-content:space-between;gap:12px;align-items:center;border:1px solid var(--line);border-radius:11px;padding:12px 14px;background:var(--surface)}
+  .item:hover{border-color:var(--line-strong)}
+  .item .meta{color:var(--muted);font-size:12.5px}
+  .stat{display:grid;gap:2px}
+  .stat b{font-size:24px;letter-spacing:-.02em}
+  .stat span{color:var(--muted);font-size:12.5px}
+  .banner{background:var(--amber-100);color:#7a4c12;border:1px solid #ecd7ad;border-radius:10px;padding:9px 13px;font-size:12.5px;margin-top:10px}
+  .banner.info{background:var(--blue-100);color:#2f4f74;border-color:#c9dcef}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 16px;border-radius:11px;font-size:13.5px;box-shadow:var(--shadow);z-index:50;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(-4px)}
+  .divider{height:1px;background:var(--line);margin:18px 0}
+  .answer{background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;white-space:pre-wrap}
+  .answer.empty-a{color:var(--muted);font-style:italic}
+  .personcard{display:flex;gap:12px;align-items:center;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:11px;padding:12px 14px;cursor:pointer}
+  .personcard:hover{border-color:var(--teal)}
+  .avatar{width:38px;height:38px;border-radius:10px;background:var(--teal-100);color:var(--teal-700);display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0}
+  .muted{color:var(--muted)}
+  .kbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+  .kbar select,.kbar input{width:auto;min-width:150px}
+  .center{max-width:520px;margin:40px auto 0}
+</style>
+</head>
+<body>
+<div class="app" id="app"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* =====================================================================
+   CONFIGURAÇÃO — preencha com os dados do seu projeto Supabase.
+   (Project Settings -> API). Enquanto estiver em branco, a app corre em
+   modo de demonstração local, para poder testar antes de ligar tudo.
+   ===================================================================== */
+const CONFIG = {
+  SUPABASE_URL: "https://sqytqycynivhqkxsbnhc.supabase.co",       // ex.: https://abcdxyz.supabase.co
+  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxeXRxeWN5bml2aHFreHNibmhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTEwNTYsImV4cCI6MjEwNDYyNzA1Nn0.eWyibKtlnt9euWstEtMIn-zw__3a9QEai3NpcJbjPTs",  // chave "anon public"
+};
+
+/* ---------- Domínio ---------- */
+const NATURES = {
+  desenvolvimento:{label:"Desenvolvimento (formação)",chip:"green",field:"Competência a desenvolver",placeholder:"Ex.: Atendimento em inglês, gestão de reclamações…"},
+  sistemas:{label:"Sistemas",chip:"blue",field:"O que é necessário",placeholder:"Ex.: acesso ao PMS, licença Office, novo terminal…"},
+  processos:{label:"Processos",chip:"amber",field:"Processo a rever/criar",placeholder:"Ex.: fluxo de check-out, procedimento de HSK…"},
+  materiais:{label:"Materiais",chip:"teal",field:"Material necessário",placeholder:"Ex.: fardamento, equipamento, consumíveis…"},
+};
+const PRIOS={alta:{label:"Alta",chip:"red"},media:{label:"Média",chip:"amber"},baixa:{label:"Baixa",chip:"green"}};
+const NEED_STATES={aberta:{label:"Aberta",chip:"amber"},curso:{label:"Em curso",chip:"blue"},resolvida:{label:"Resolvida",chip:"green"}};
+const ROLE={trabalhador:"Trabalhador",chefe:"Chefe",rh:"RH"};
+const ROLE_RANK={trabalhador:1,chefe:2,rh:3};
+
+/* ---------- Estado ---------- */
+const state={view:"login",params:{},user:null,authEmail:null,authSent:false,
+  org:{companies:[],people:[]},checkins:{},draft:null};
+let sb=null;
+
+/* ---------- Utils ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const initials=n=>(n||"?").split(/\s+/).filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase();
+const norm=s=>(s==null?"":String(s)).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").trim();
+function currentQuarter(){const d=new Date();return{year:d.getFullYear(),q:Math.floor(d.getMonth()/3)+1};}
+const qLabel=(y,q)=>`${q}.º trimestre de ${y}`;
+const qShort=(y,q)=>`T${q} ${y}`;
+const todayISO=()=>new Date().toISOString().slice(0,10);
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600);}
+function normRole(v){const n=norm(v);if(n.startsWith("rh")||n.includes("recursos"))return"rh";if(n.startsWith("chef")||n.includes("gestor")||n.includes("manager")||n.includes("diretor"))return"chefe";return"trabalhador";}
+function chunk(a,n){const o=[];for(let i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o;}
+
+/* ---------- Consultas em memória ---------- */
+const companyById=id=>state.org.companies.find(c=>c.id===id);
+const personById=id=>state.org.people.find(p=>p.id===id);
+const personByEmail=e=>state.org.people.find(p=>norm(p.email)===norm(e));
+const peopleOf=cid=>state.org.people.filter(p=>p.companyId===cid);
+const teamOf=u=>state.org.people.filter(p=>p.managerId===u.id);
+const scopeCompanies=u=>u.role==="rh"?state.org.companies:[companyById(u.companyId)].filter(Boolean);
+function ckBucket(cid){return state.checkins[cid]||(state.checkins[cid]=[]);}
+function findCheckin(cid,workerId,y,q){return (state.checkins[cid]||[]).find(c=>c.workerId===workerId&&c.year===y&&c.q===q);}
+function findCk(id){for(const cid in state.checkins){const f=(state.checkins[cid]||[]).find(c=>c.id===id);if(f)return f;}return null;}
+function scopedCheckins(u){
+  let list=[];scopeCompanies(u).forEach(c=>{list=list.concat(state.checkins[c.id]||[]);});
+  if(u.role==="rh")return list;
+  if(u.role==="chefe"){const t=new Set(teamOf(u).map(p=>p.id));t.add(u.id);return list.filter(c=>t.has(c.workerId));}
+  return list.filter(c=>c.workerId===u.id);
+}
+function visiblePeople(u){
+  if(u.role==="rh")return state.org.people;
+  if(u.role==="chefe"){const t=teamOf(u).slice();if(!t.find(p=>p.id===u.id))t.push(u);return t;}
+  return [u];
+}
+function canManage(u,worker){if(!worker)return false;return u.role==="rh"||(ROLE_RANK[u.role]>=2&&worker.managerId===u.id);}
+
+/* =====================================================================
+   Camada de dados — Supabase ou demonstração local
+   ===================================================================== */
+const STORE=(()=>{ // apenas para o modo demonstração
+  const mem=new Map();
+  const hasWS=(typeof window!=="undefined"&&window.storage&&typeof window.storage.get==="function");
+  const ls=(()=>{try{const k="__t";window["localStorage"].setItem(k,"1");window["localStorage"].removeItem(k);return window["localStorage"];}catch(e){return null;}})();
+  return{
+    async get(k){if(hasWS){try{const r=await window.storage.get(k,true);return r?JSON.parse(r.value):null;}catch(e){return null;}}if(ls){const v=ls.getItem(k);return v?JSON.parse(v):null;}return mem.has(k)?mem.get(k):null;},
+    async set(k,v){const s=JSON.stringify(v);if(hasWS){try{await window.storage.set(k,s,true);return;}catch(e){}}if(ls){ls.setItem(k,s);return;}mem.set(k,v);},
+    async del(k){if(hasWS){try{await window.storage.delete(k,true);}catch(e){}return;}if(ls){ls.removeItem(k);return;}mem.delete(k);}
+  };
+})();
+const K_ORG="pda:org",K_CK=cid=>"pda:ck:"+cid;
+
+/* mapeadores Supabase <-> app */
+const rowToPerson=r=>({id:r.id,name:r.full_name,email:r.email,func:r.job_title,role:r.role,companyId:r.company_id,managerId:r.manager_id,managerEmail:r.manager_email});
+const rowToCk=r=>({id:r.id,companyId:r.company_id,workerId:r.worker_id,managerId:r.manager_id,year:r.year,q:r.quarter,date:r.meeting_date,status:r.status,good:r.good||"",bad:r.bad||"",help:r.help||"",needs:r.needs||[],updatedAt:r.updated_at});
+const ckToRow=c=>({id:c.id,company_id:c.companyId,worker_id:c.workerId,manager_id:c.managerId,year:c.year,quarter:c.q,meeting_date:c.date||null,status:c.status,good:c.good,bad:c.bad,help:c.help,needs:c.needs,updated_at:new Date().toISOString()});
+
+const DB={
+  mode:"demo",
+
+  /* ----- Supabase ----- */
+  async loadMe(){
+    try{await sb.rpc("link_me");}catch(e){}
+    const {data,error}=await sb.from("people").select("*").eq("user_id",(await sb.auth.getUser()).data.user.id).maybeSingle();
+    if(error)throw error;return data?rowToPerson(data):null;
+  },
+  async loadOrg_sb(){
+    const {data:comps,error:e1}=await sb.from("companies").select("*").order("name");if(e1)throw e1;
+    const {data:ppl,error:e2}=await sb.from("people").select("*").order("full_name");if(e2)throw e2;
+    return {companies:(comps||[]).map(c=>({id:c.id,name:c.name})),people:(ppl||[]).map(rowToPerson)};
+  },
+  async loadCheckins_sb(){
+    let all=[],from=0,size=1000;
+    while(true){
+      const {data,error}=await sb.from("checkins").select("*").order("year",{ascending:false}).range(from,from+size-1);
+      if(error)throw error;all=all.concat(data||[]);
+      if(!data||data.length<size)break;from+=size;
+    }
+    return all.map(rowToCk);
+  },
+  async saveCheckin_sb(c){
+    const uid_=(await sb.auth.getUser()).data.user.id;
+    const row=ckToRow(c);row.created_by=uid_;
+    const {data,error}=await sb.from("checkins").upsert(row,{onConflict:"worker_id,year,quarter"}).select().single();
+    if(error)throw error;return rowToCk(data);
+  },
+  async addCompany_sb(name){const {data,error}=await sb.from("companies").insert({name}).select().single();if(error)throw error;return {id:data.id,name:data.name};},
+  async addPerson_sb(p){const {data,error}=await sb.from("people").insert({full_name:p.name,email:p.email,job_title:p.func,role:p.role,company_id:p.companyId,manager_id:p.managerId}).select().single();if(error)throw error;return rowToPerson(data);},
+  async importRoster_sb(rows){
+    const names=[...new Set(rows.map(r=>r.empresa).filter(Boolean))];
+    if(names.length){const {error}=await sb.from("companies").upsert(names.map(n=>({name:n})),{onConflict:"name"});if(error)throw error;}
+    const {data:comps}=await sb.from("companies").select("id,name");
+    const cmap={};(comps||[]).forEach(c=>cmap[norm(c.name)]=c.id);
+    const prows=rows.map(r=>({email:norm(r.email),full_name:r.nome,job_title:r.funcao||null,role:normRole(r.perfil),company_id:cmap[norm(r.empresa)]||null,manager_email:r.email_chefia?norm(r.email_chefia):null}));
+    for(const part of chunk(prows,400)){const {error}=await sb.from("people").upsert(part,{onConflict:"email"});if(error)throw error;}
+    const {error:re}=await sb.rpc("resolve_managers");if(re)throw re;
+  },
+
+  /* ----- Demonstração local ----- */
+  async loadOrg_demo(){state.org=(await STORE.get(K_ORG))||{companies:[],people:[]};},
+  async saveOrg_demo(){await STORE.set(K_ORG,state.org);},
+  async saveCheckin_demo(c){
+    const arr=ckBucket(c.companyId);
+    const i=arr.findIndex(x=>x.id===c.id||(x.workerId===c.workerId&&x.year===c.year&&x.q===c.q));
+    if(i>=0)arr[i]=c;else arr.push(c);
+    await STORE.set(K_CK(c.companyId),arr);return c;
+  },
+  async importRoster_demo(rows){
+    rows.forEach(r=>{
+      const cname=(r.empresa||"").trim();
+      let comp=state.org.companies.find(c=>norm(c.name)===norm(cname));
+      if(cname&&!comp){comp={id:uid(),name:cname};state.org.companies.push(comp);}
+      const email=norm(r.email);if(!email)return;
+      let p=personByEmail(email);
+      const base={name:r.nome,func:r.funcao||"",role:normRole(r.perfil),companyId:comp?comp.id:null,email,managerEmail:r.email_chefia?norm(r.email_chefia):null};
+      if(p)Object.assign(p,base);else{p={id:uid(),...base,managerId:null};state.org.people.push(p);}
+    });
+    state.org.people.forEach(p=>{p.managerId=p.managerEmail?(personByEmail(p.managerEmail)||{}).id||null:null;});
+    await this.saveOrg_demo();
+  },
+  async addCompany_demo(name){const c={id:uid(),name};state.org.companies.push(c);await this.saveOrg_demo();return c;},
+  async addPerson_demo(p){const np={id:uid(),...p};state.org.people.push(np);await this.saveOrg_demo();return np;},
+
+  /* ----- fachada ----- */
+  async loadAll(){
+    if(this.mode==="supabase"){
+      state.org=await this.loadOrg_sb();
+      state.checkins={};(await this.loadCheckins_sb()).forEach(c=>ckBucket(c.companyId).push(c));
+    }else{
+      await this.loadOrg_demo();
+      state.checkins={};
+      for(const c of state.org.companies){state.checkins[c.id]=(await STORE.get(K_CK(c.id)))||[];}
+    }
+  },
+  async saveCheckin(c){return this.mode==="supabase"?this.saveCheckin_sb(c):this.saveCheckin_demo(c);},
+  async importRoster(rows){return this.mode==="supabase"?this.importRoster_sb(rows):this.importRoster_demo(rows);},
+  async addCompany(n){return this.mode==="supabase"?this.addCompany_sb(n):this.addCompany_demo(n);},
+  async addPerson(p){return this.mode==="supabase"?this.addPerson_sb(p):this.addPerson_demo(p);},
+};
+
+/* =====================================================================
+   Render / routing
+   ===================================================================== */
+function setView(v,params={}){state.view=v;state.params=params;render();window.scrollTo(0,0);}
+async function persistAndRefresh(c){const saved=await DB.saveCheckin(c);const arr=ckBucket(saved.companyId);const i=arr.findIndex(x=>x.id===saved.id||(x.workerId===saved.workerId&&x.year===saved.year&&x.q===saved.q));if(i>=0)arr[i]=saved;else arr.push(saved);return saved;}
+
+function render(){
+  const app=$("#app");
+  if(!state.user){app.innerHTML=routeAuth();wireAuth();return;}
+  app.innerHTML=topbar()+`<div id="main">${routeBody()}</div>`;
+  wireTop();wireBody();
+}
+
+/* ---------- Ecrãs de entrada ---------- */
+function routeAuth(){
+  if(DB.mode==="supabase"){
+    if(state.authEmail&&!state.user)return viewUnlinked();
+    return viewAuthLogin();
+  }
+  // demo
+  if(state.org.people.length===0||state.params.setup)return viewSetup();
+  return viewDemoPicker();
+}
+function viewAuthLogin(){
+  return `<div class="center">
+    <div style="display:flex;align-items:center;gap:12px;margin:0 0 8px">
+      <span class="dot" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block"></span>
+      <h1 style="margin:0">Reuniões de Acompanhamento</h1></div>
+    <p class="sub" style="margin-bottom:22px">Gestão de desempenho · Blue &amp; Green</p>
+    <div class="card pad">
+      ${state.authSent?`
+        <h2>Verifique o seu email</h2>
+        <p class="sub" style="margin-top:6px">Enviámos um link de acesso para <b>${esc(state.authEmail)}</b>. Abra-o neste dispositivo para entrar.</p>
+        <button class="btn ghost sm" data-act="auth-reset" style="margin-top:14px">Usar outro email</button>`
+      :`
+        <label class="f">Email de trabalho</label>
+        <input type="email" id="authEmail" placeholder="nome@empresa.pt" value="${esc(state.authEmail||"")}">
+        <button class="btn primary" data-act="auth-send" style="margin-top:14px;width:100%">Receber link de acesso</button>
+        <p class="hint" style="margin-top:12px">Vai receber um email com um link para entrar, sem palavra-passe.</p>`}
+    </div></div>`;
+}
+function viewUnlinked(){
+  return `<div class="center"><div class="card pad">
+    <h2>Conta ainda não associada</h2>
+    <p class="sub" style="margin-top:6px">Entrou com <b>${esc(state.authEmail)}</b>, mas este email ainda não consta na lista de colaboradores. Peça ao RH para o incluir.</p>
+    <button class="btn" data-act="auth-signout" style="margin-top:16px">Sair</button>
+  </div></div>`;
+}
+function viewSetup(){
+  return `<div class="center" style="max-width:640px">
+    <div style="display:flex;align-items:center;gap:12px;margin:0 0 6px">
+      <span class="dot" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block"></span>
+      <h1 style="margin:0">Configuração inicial</h1></div>
+    <p class="sub">Modo de demonstração local (sem Supabase configurado). Carregue a lista de colaboradores por Excel para começar a testar.</p>
+    <div class="banner info" style="margin:14px 0">Para produção, preencha <b>CONFIG</b> no topo do ficheiro com o URL e a chave do seu projeto Supabase. Veja o guia passo a passo.</div>
+    ${importPanel()}
+    ${state.org.people.length?`<button class="btn primary" data-act="go-picker" style="margin-top:14px">Continuar (${state.org.people.length} colaboradores)</button>`:""}
+  </div>`;
+}
+function viewDemoPicker(){
+  const byCompany=state.org.companies.map(c=>{
+    const ppl=peopleOf(c.id);if(!ppl.length)return"";
+    return `<div class="section-title" style="margin-top:22px">${esc(c.name)}</div><div class="list">${ppl.map(personCardBtn).join("")}</div>`;
+  }).join("");
+  return `<div class="app"><div style="max-width:640px;margin:0 auto">
+    <div style="display:flex;align-items:center;gap:12px;margin:30px 0 6px">
+      <span class="dot" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block"></span>
+      <h1 style="margin:0">Reuniões de Acompanhamento</h1></div>
+    <p class="sub">Modo de demonstração — escolha com quem quer entrar para experimentar cada perfil.
+      <a href="#" data-act="reconfig">Importar mais colaboradores</a></p>
+    ${byCompany}
+  </div></div>`;
+}
+function personCardBtn(p){
+  const c=companyById(p.companyId);
+  const badge=p.role==="rh"?`<span class="chip teal">RH</span>`:p.role==="chefe"?`<span class="chip green">Chefe</span>`:`<span class="chip">Trabalhador</span>`;
+  return `<button class="personcard" data-login="${p.id}"><span class="avatar">${initials(p.name)}</span>
+    <span style="flex:1"><b>${esc(p.name)}</b><br><span class="muted" style="font-size:12.5px">${esc(p.func||"")}${c?" · "+esc(c.name):""}</span></span>${badge}</button>`;
+}
+function wireAuth(){
+  const app=$("#app");
+  app.querySelectorAll("[data-act]").forEach(el=>el.onclick=e=>{e.preventDefault();handleAction(el.dataset.act,el);});
+  app.querySelectorAll("[data-login]").forEach(b=>b.onclick=async()=>{state.user=personById(b.dataset.login);await DB.loadAll();setView("home");});
+  wireImportPanel(app);
+}
+
+/* ---------- Painel de importação (reutilizado) ---------- */
+function importPanel(){
+  return `<div class="card pad" style="margin-top:14px">
+    <h2>Importar colaboradores (Excel)</h2>
+    <p class="sub" style="margin-top:4px">Colunas: empresa, nome, email, funcao, perfil, email_chefia.</p>
+    <div class="row" style="margin-top:12px">
+      <button class="btn" data-act="template">Descarregar modelo Excel</button>
+      <label class="btn primary" style="cursor:pointer">Escolher ficheiro…
+        <input type="file" id="xlsxFile" accept=".xlsx,.xls,.csv" style="display:none"></label>
+    </div>
+    <div id="importResult" style="margin-top:12px"></div>
+  </div>`;
+}
+function wireImportPanel(root){
+  const f=root.querySelector("#xlsxFile");
+  if(f)f.onchange=e=>handleImportFile(e.target.files[0]);
+}
+async function handleImportFile(file){
+  if(!file)return;
+  const res=$("#importResult");res.innerHTML=`<span class="chip amber">A ler ${esc(file.name)}…</span>`;
+  try{
+    const buf=await file.arrayBuffer();
+    const wb=XLSX.read(buf,{type:"array"});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const json=XLSX.utils.sheet_to_json(ws,{defval:""});
+    const rows=[];const warn=[];
+    json.forEach(raw=>{
+      const r={};for(const k in raw){const nk=norm(k);
+        if(nk.includes("chefia")||nk.includes("gestor")||nk.includes("manager"))r.email_chefia=raw[k];
+        else if(nk==="email"||nk.includes("e-mail")||nk==="mail")r.email=raw[k];
+        else if(nk.includes("empresa")||nk.includes("unidade")||nk.includes("hotel"))r.empresa=raw[k];
+        else if(nk.includes("nome"))r.nome=raw[k];
+        else if(nk.includes("funcao")||nk.includes("cargo"))r.funcao=raw[k];
+        else if(nk.includes("perfil")||nk.includes("role")||nk.includes("tipo"))r.perfil=raw[k];}
+      if(norm(r.nome).includes("nome completo")||norm(r.email).includes("chave de login"))return; // linha de ajuda
+      if(r.nome&&r.email)rows.push(r);
+    });
+    if(!rows.length){res.innerHTML=`<div class="banner">Não foram encontradas linhas válidas. Confirme que existem colunas <b>nome</b> e <b>email</b>.</div>`;return;}
+    const emails=new Set(rows.map(r=>norm(r.email)));
+    rows.forEach(r=>{if(r.email_chefia&&!emails.has(norm(r.email_chefia))&&!personByEmail(r.email_chefia))warn.push(norm(r.email_chefia));});
+    res.innerHTML=`<span class="chip amber">A carregar ${rows.length} colaboradores…</span>`;
+    await DB.importRoster(rows);
+    await DB.loadAll();
+    const w=warn.length?`<div class="banner" style="margin-top:8px">${warn.length} chefia(s) indicada(s) por email não foram encontradas e ficaram sem ligação: ${esc([...new Set(warn)].slice(0,5).join(", "))}${warn.length>5?"…":""}</div>`:"";
+    res.innerHTML=`<div class="banner info">Importados ${rows.length} colaboradores em ${state.org.companies.length} empresa(s).</div>${w}`;
+    toast("Importação concluída.");
+    if(state.user)render();else if(DB.mode==="demo")setTimeout(()=>render(),400);
+  }catch(err){
+    res.innerHTML=`<div class="banner">Falha na importação: ${esc(err.message||err)}</div>`;
+  }
+}
+async function downloadTemplate(){
+  const ws=XLSX.utils.aoa_to_sheet([
+    ["empresa","nome","email","funcao","perfil","email_chefia"],
+    ["Verdelago Resort","Helena Marques","helena.marques@exemplo.pt","Diretora de Operações","chefe",""],
+    ["Verdelago Resort","Rui Tavares","rui.tavares@exemplo.pt","Governanta-Chefe","chefe","helena.marques@exemplo.pt"],
+    ["Verdelago Resort","Mariana Lopes","mariana.lopes@exemplo.pt","Empregada de andares","trabalhador","rui.tavares@exemplo.pt"],
+    ["Serviços Centrais","Nuno Ferreira","nuno.ferreira@exemplo.pt","Head of Corporate HR","rh",""],
+  ]);
+  ws["!cols"]=[{wch:24},{wch:24},{wch:30},{wch:26},{wch:14},{wch:30}];
+  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,"colaboradores");
+  XLSX.writeFile(wb,"roster_modelo.xlsx");
+}
+
+/* ---------- Topbar ---------- */
+function topbar(){
+  const u=state.user,c=companyById(u.companyId);
+  const tabs=[["home","Início"]];
+  if(ROLE_RANK[u.role]>=2)tabs.push(["team","A minha equipa"]);
+  tabs.push(["mine","As minhas reuniões"]);tabs.push(["consolidated","Consolidado"]);
+  if(ROLE_RANK[u.role]>=2)tabs.push(["needs","Necessidades"]);
+  if(u.role==="rh")tabs.push(["admin","Gestão"]);
+  const demoBanner=DB.mode==="demo"?`<div class="banner">Modo de demonstração. Ligue o Supabase (CONFIG no topo do ficheiro) para uso real com autenticação.</div>`:"";
+  return `<div class="topbar"><div class="topbar-in">
+      <div class="brand"><span class="dot"></span><div>Reuniões de Acompanhamento<small>Blue &amp; Green · Gestão de desempenho</small></div></div>
+      <div class="who"><div class="name" style="text-align:right">${esc(u.name)}<span>${esc((c?c.name+" · ":"")+ROLE[u.role])}</span></div>
+        <div class="avatar">${initials(u.name)}</div>
+        <button class="btn ghost sm" data-act="logout">${DB.mode==="supabase"?"Sair":"Trocar"}</button></div>
+    </div>
+    <nav class="tabs">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${state.view===k?'active':''}">${l}</button>`).join("")}</nav>
+    ${demoBanner}</div>`;
+}
+function routeBody(){switch(state.view){
+  case"home":return viewHome();case"team":return viewTeam();case"mine":return viewMine();
+  case"meeting":return viewMeeting();case"consolidated":return viewConsolidated();
+  case"needs":return viewNeeds();case"admin":return viewAdmin();default:return viewHome();}}
+
+/* ---------- Início ---------- */
+function viewHome(){
+  const u=state.user,mine=scopedCheckins(u),{year,q}=currentQuarter();
+  let cards="";
+  if(ROLE_RANK[u.role]>=2){const team=teamOf(u);const done=team.filter(p=>findCheckin(p.companyId,p.id,year,q)).length;cards+=statCard(done+"/"+team.length,`Reuniões deste trimestre (${qShort(year,q)})`);}
+  const openNeeds=mine.flatMap(c=>c.needs||[]).filter(n=>n.estado!=="resolvida").length;
+  cards+=statCard(String(mine.length),u.role==="trabalhador"?"As minhas reuniões":"Reuniões no seu âmbito");
+  cards+=statCard(String(openNeeds),"Necessidades por resolver");
+  const quick=ROLE_RANK[u.role]>=2?`<button class="btn primary" data-act="new">Nova reunião de acompanhamento</button>`:"";
+  const guide={trabalhador:"Aqui pode consultar as reuniões que teve com a sua chefia e o que ficou registado, por trimestre.",
+    chefe:"Registe reuniões trimestrais com a sua equipa, responda às 3 questões e identifique necessidades.",
+    rh:"Tem visão de todo o grupo: consulte e trabalhe a informação por trabalhador, por trimestre e por natureza de necessidade."}[u.role];
+  return `<h1>Olá, ${esc((u.name||"").split(" ")[0])}.</h1><p class="sub">${guide}</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin:20px 0">${cards}</div>
+    <div class="row">${quick}<button class="btn" data-tab="consolidated">Ver consolidado</button>
+      ${ROLE_RANK[u.role]>=2?`<button class="btn" data-tab="needs">Ver necessidades</button>`:""}</div>`;
+}
+function statCard(b,l){return `<div class="card pad stat"><b>${esc(b)}</b><span>${esc(l)}</span></div>`;}
+
+/* ---------- A minha equipa ---------- */
+function viewTeam(){
+  const u=state.user;let team=u.role==="rh"?state.org.people.filter(p=>p.managerId):teamOf(u);
+  const {year,q}=currentQuarter();
+  const filterBar=u.role==="rh"?`<div class="kbar"><select id="fltCompany"><option value="">Todas as empresas</option>${state.org.companies.map(c=>`<option value="${c.id}" ${state.params.company===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></div>`:"";
+  if(u.role==="rh"&&state.params.company)team=team.filter(p=>p.companyId===state.params.company);
+  const rows=team.length?team.map(p=>{
+    const ck=findCheckin(p.companyId,p.id,year,q);
+    const status=ck?(ck.status==="submetida"?`<span class="chip green">Feita · ${qShort(year,q)}</span>`:`<span class="chip amber">Rascunho</span>`):`<span class="chip">Sem reunião ${qShort(year,q)}</span>`;
+    const mgr=personById(p.managerId);
+    return `<div class="item"><div class="row" style="gap:12px"><span class="avatar">${initials(p.name)}</span>
+        <div><b>${esc(p.name)}</b><div class="meta">${esc(p.func||"")}${u.role==="rh"&&mgr?" · chefia: "+esc(mgr.name):""}</div></div></div>
+      <div class="row">${status}<button class="btn sm primary" data-meeting="${p.id}">${ck?"Abrir":"Iniciar"}</button>
+        <button class="btn sm" data-consol="${p.id}">Histórico</button></div></div>`;
+  }).join(""):`<div class="empty"><b>Sem colaboradores</b>Ainda não há trabalhadores associados a si como chefia.</div>`;
+  return `<h1>A minha equipa</h1><p class="sub">Reuniões de acompanhamento de ${qLabel(year,q)}.</p>${filterBar}<div class="list" style="margin-top:14px">${rows}</div>`;
+}
+
+/* ---------- As minhas reuniões ---------- */
+function viewMine(){
+  const u=state.user;
+  const mine=(state.checkins[u.companyId]||[]).filter(c=>c.workerId===u.id).sort(sortDesc);
+  if(!mine.length)return `<h1>As minhas reuniões</h1><div class="empty" style="margin-top:16px"><b>Ainda sem registos</b>Quando tiver uma reunião de acompanhamento com a sua chefia, aparece aqui.</div>`;
+  return `<h1>As minhas reuniões</h1><p class="sub">O que ficou registado nas suas reuniões, por trimestre.</p><div class="grid" style="margin-top:16px">${mine.map(c=>checkinReadCard(c,false)).join("")}</div>`;
+}
+
+/* ---------- Formulário da reunião ---------- */
+function startDraft(workerId){
+  const u=state.user,worker=personById(workerId),{year,q}=currentQuarter();
+  const existing=findCheckin(worker.companyId,workerId,year,q);
+  state.draft=existing?JSON.parse(JSON.stringify(existing)):{id:uid(),companyId:worker.companyId,workerId,managerId:u.id,year,q,date:todayISO(),status:"rascunho",good:"",bad:"",help:"",needs:[],updatedAt:null};
+}
+function viewMeeting(){
+  const d=state.draft;if(!d)return viewHome();
+  const worker=personById(d.workerId);
+  const years=[];const ny=currentQuarter().year;for(let y=ny+1;y>=ny-3;y--)years.push(y);
+  const existsNote=findCheckin(d.companyId,d.workerId,d.year,d.q)&&d.updatedAt?`<span class="chip amber">A editar reunião existente</span>`:"";
+  return `<div class="spread"><h1>Reunião de acompanhamento</h1><button class="btn ghost" data-act="back">← Voltar</button></div>
+    <p class="sub">Com <b>${esc(worker.name)}</b> · ${esc(worker.func||"")} · ${esc(companyById(d.companyId).name)}</p>
+    <div class="card pad" style="margin-top:16px">
+      <div class="two">
+        <div class="field"><label class="f">Trimestre</label><div class="row" style="gap:8px">
+          <select data-field="q" style="max-width:150px">${[1,2,3,4].map(n=>`<option value="${n}" ${d.q==n?"selected":""}>${n}.º trimestre</option>`).join("")}</select>
+          <select data-field="year" style="max-width:110px">${years.map(y=>`<option value="${y}" ${d.year==y?"selected":""}>${y}</option>`).join("")}</select></div>
+          <div class="hint" style="margin-top:6px">Uma reunião por trabalhador e por trimestre. ${existsNote}</div></div>
+        <div class="field"><label class="f">Data da reunião</label><input type="date" data-field="date" value="${esc(d.date)}"></div></div>
+      <div class="divider"></div>
+      <div class="q"><div class="num">1</div><div><div class="qt">O que correu bem e devemos continuar?</div>
+        <textarea data-field="good" placeholder="Pontos fortes, resultados e comportamentos a manter…">${esc(d.good)}</textarea></div></div>
+      <div class="q"><div class="num">2</div><div><div class="qt">O que correu mal e devemos corrigir?</div>
+        <textarea data-field="bad" placeholder="Dificuldades, obstáculos e aspetos a melhorar…">${esc(d.bad)}</textarea></div></div>
+      <div class="q"><div class="num">3</div><div><div class="qt">Como é que eu (chefia) posso ajudar?</div>
+        <textarea data-field="help" placeholder="Compromissos e apoio concreto da chefia…">${esc(d.help)}</textarea></div></div>
+      <div class="divider"></div>
+      <div class="spread"><div><h2>Necessidades identificadas</h2><p class="sub">De desenvolvimento, sistemas, processos ou materiais.</p></div></div>
+      <div id="needsList" style="margin-top:12px">${renderNeedsList()}</div>
+      ${needAddForm()}
+      <div class="divider"></div>
+      <div class="row"><button class="btn primary" data-act="save" data-status="submetida">Guardar e submeter</button>
+        <button class="btn" data-act="save" data-status="rascunho">Guardar rascunho</button>
+        <span class="hint">${d.updatedAt?("Última atualização: "+new Date(d.updatedAt).toLocaleString("pt-PT")):"Ainda não guardada."}</span></div>
+    </div>`;
+}
+function renderNeedsList(){
+  const d=state.draft;
+  if(!d.needs.length)return `<div class="empty" style="padding:20px"><b>Sem necessidades</b>Adicione abaixo, se aplicável.</div>`;
+  return d.needs.map(n=>{const nt=NATURES[n.nature];
+    return `<div class="need"><div class="top"><span class="chip ${nt.chip}">${nt.label}</span>
+        <div class="row"><span class="chip ${PRIOS[n.prio].chip}">Prioridade ${PRIOS[n.prio].label}</span>
+          <button class="btn ghost sm danger" data-delneed="${n.id}">Remover</button></div></div>
+      <div><b>${esc(nt.field)}:</b> ${esc(n.value)}</div>${n.note?`<div class="muted" style="font-size:13px;margin-top:2px">${esc(n.note)}</div>`:""}</div>`;
+  }).join("");
+}
+function needAddForm(){
+  return `<div class="card" style="box-shadow:none;background:var(--surface-2);margin-top:12px"><div class="pad">
+    <div class="two"><div class="field"><label class="f">Natureza da necessidade</label>
+        <select id="nNature">${Object.entries(NATURES).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join("")}</select></div>
+      <div class="field"><label class="f">Prioridade</label>
+        <select id="nPrio">${Object.entries(PRIOS).map(([k,v])=>`<option value="${k}" ${k==="media"?"selected":""}>${v.label}</option>`).join("")}</select></div></div>
+    <div class="field"><label class="f" id="nValueLabel">${NATURES.desenvolvimento.field}</label>
+      <input type="text" id="nValue" placeholder="${NATURES.desenvolvimento.placeholder}"></div>
+    <div class="field"><label class="f">Nota / detalhe <span class="hint">(opcional)</span></label>
+      <input type="text" id="nNote" placeholder="Contexto adicional…"></div>
+    <button class="btn" data-act="addneed">+ Adicionar necessidade</button></div></div>`;
+}
+
+/* ---------- Consolidado ---------- */
+function viewConsolidated(){
+  const u=state.user,people=visiblePeople(u);
+  const sel=state.params.person||(u.role==="trabalhador"?u.id:"");
+  const bar=`<div class="kbar">
+      ${u.role==="rh"?`<select id="cCompany"><option value="">Todas as empresas</option>${state.org.companies.map(c=>`<option value="${c.id}" ${state.params.company===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>`:""}
+      <select id="cPerson"><option value="">— Escolha um trabalhador —</option>
+        ${people.filter(p=>!state.params.company||p.companyId===state.params.company).map(p=>`<option value="${p.id}" ${sel===p.id?"selected":""}>${esc(p.name)} (${esc((companyById(p.companyId)||{}).name||"")})</option>`).join("")}</select>
+      ${sel?`<button class="btn sm" data-act="export-person">Exportar CSV</button>`:""}</div>`;
+  let body;
+  if(!sel)body=`<div class="empty"><b>Escolha um trabalhador</b>Veja o histórico consolidado das reuniões, trimestre a trimestre.</div>`;
+  else{const p=personById(sel);const list=(state.checkins[p.companyId]||[]).filter(c=>c.workerId===sel).sort(sortDesc);
+    const head=`<div class="card pad" style="margin-bottom:14px"><div class="row" style="gap:12px"><span class="avatar">${initials(p.name)}</span>
+        <div><h2>${esc(p.name)}</h2><p class="sub">${esc(p.func||"")} · ${esc((companyById(p.companyId)||{}).name||"")}${p.managerId&&personById(p.managerId)?" · chefia: "+esc(personById(p.managerId).name):""}</p></div>
+        <div style="margin-left:auto" class="row"><span class="chip">${list.length} reuniõe(s)</span></div></div></div>`;
+    body=head+(list.length?`<div class="grid">${list.map(c=>checkinReadCard(c,canManage(u,p))).join("")}</div>`:`<div class="empty"><b>Sem reuniões registadas</b>Ainda não há acompanhamentos para este trabalhador.</div>`);}
+  return `<h1>Consolidado por trabalhador</h1><p class="sub">Informação reunida e organizada por trimestre.</p>${bar}${body}`;
+}
+function sortDesc(a,b){return(b.year-a.year)||(b.q-a.q);}
+function checkinReadCard(c,editable){
+  const mgr=personById(c.managerId);
+  const statusChip=c.status==="submetida"?`<span class="chip green">Submetida</span>`:`<span class="chip amber">Rascunho</span>`;
+  const ans=(t,v)=>`<div class="field" style="margin-bottom:12px"><label class="f">${t}</label><div class="answer ${v?"":"empty-a"}">${v?esc(v):"— sem registo —"}</div></div>`;
+  const needs=(c.needs||[]).length?`<div class="section-title" style="margin:8px 0 8px">Necessidades</div>${c.needs.map(n=>needReadRow(c,n,editable)).join("")}`:"";
+  return `<div class="card pad"><div class="spread" style="margin-bottom:12px">
+      <div><h2>${qLabel(c.year,c.q)}</h2><p class="sub">${c.date?new Date(c.date).toLocaleDateString("pt-PT"):""} · chefia: ${mgr?esc(mgr.name):"—"}</p></div>
+      <div class="row">${statusChip}${editable?`<button class="btn sm" data-editck="${c.id}">Editar</button>`:""}</div></div>
+    ${ans("O que correu bem e devemos continuar?",c.good)}${ans("O que correu mal e devemos corrigir?",c.bad)}${ans("Como é que a chefia pode ajudar?",c.help)}${needs}</div>`;
+}
+function needReadRow(c,n,editable){
+  const nt=NATURES[n.nature];
+  const stateSel=editable?`<select class="need-state" data-ck="${c.id}" data-need="${n.id}" style="width:auto;padding:5px 8px;font-size:12.5px">${Object.entries(NEED_STATES).map(([k,v])=>`<option value="${k}" ${(n.estado||"aberta")===k?"selected":""}>${v.label}</option>`).join("")}</select>`:`<span class="chip ${NEED_STATES[n.estado||"aberta"].chip}">${NEED_STATES[n.estado||"aberta"].label}</span>`;
+  return `<div class="need"><div class="top"><span class="chip ${nt.chip}">${nt.label}</span>
+      <div class="row"><span class="chip ${PRIOS[n.prio].chip}">${PRIOS[n.prio].label}</span>${stateSel}</div></div>
+    <div><b>${esc(nt.field)}:</b> ${esc(n.value)}</div>${n.note?`<div class="muted" style="font-size:13px;margin-top:2px">${esc(n.note)}</div>`:""}</div>`;
+}
+
+/* ---------- Necessidades ---------- */
+function viewNeeds(){
+  const u=state.user,cks=scopedCheckins(u),f=state.params;
+  let rows=[];cks.forEach(c=>(c.needs||[]).forEach(n=>rows.push({...n,ck:c})));
+  if(f.nature)rows=rows.filter(r=>r.nature===f.nature);
+  if(f.company)rows=rows.filter(r=>r.ck.companyId===f.company);
+  if(f.estado)rows=rows.filter(r=>(r.estado||"aberta")===f.estado);
+  rows.sort((a,b)=>(Object.keys(PRIOS).indexOf(a.prio)-Object.keys(PRIOS).indexOf(b.prio))||sortDesc(a.ck,b.ck));
+  const comp={};cks.forEach(c=>(c.needs||[]).forEach(n=>{if(n.nature==="desenvolvimento"){const k=(n.value||"").trim();if(k)comp[k]=(comp[k]||0)+1;}}));
+  const compTop=Object.entries(comp).sort((a,b)=>b[1]-a[1]).slice(0,6);
+  const byNature=Object.keys(NATURES).map(k=>{const count=cks.flatMap(c=>c.needs||[]).filter(x=>x.nature===k).length;return `<div class="card pad stat"><b>${count}</b><span>${NATURES[k].label}</span></div>`;}).join("");
+  const bar=`<div class="kbar">
+    <select id="nfNature"><option value="">Todas as naturezas</option>${Object.entries(NATURES).map(([k,v])=>`<option value="${k}" ${f.nature===k?"selected":""}>${v.label}</option>`).join("")}</select>
+    <select id="nfEstado"><option value="">Todos os estados</option>${Object.entries(NEED_STATES).map(([k,v])=>`<option value="${k}" ${f.estado===k?"selected":""}>${v.label}</option>`).join("")}</select>
+    ${u.role==="rh"?`<select id="nfCompany"><option value="">Todas as empresas</option>${state.org.companies.map(c=>`<option value="${c.id}" ${f.company===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select>`:""}
+    <button class="btn sm" data-act="export-needs">Exportar CSV</button></div>`;
+  const compBox=compTop.length?`<div class="card pad" style="margin-bottom:16px"><h2>Competências mais pedidas</h2><p class="sub">Sinal direto para o plano de formação.</p>
+      <div class="grid" style="margin-top:12px">${compTop.map(([k,v])=>`<div class="item"><div><b>${esc(k)}</b></div><span class="chip green">${v} pedido(s)</span></div>`).join("")}</div></div>`:"";
+  const listHtml=rows.length?rows.map(r=>{const w=personById(r.ck.workerId),nt=NATURES[r.nature];
+    return `<div class="item"><div><span class="chip ${nt.chip}">${nt.label}</span>
+        <div style="margin-top:6px"><b>${esc(r.value)}</b></div>
+        <div class="meta">${esc(w?w.name:"—")} · ${esc((companyById(r.ck.companyId)||{}).name||"")} · ${qShort(r.ck.year,r.ck.q)}${r.note?" · "+esc(r.note):""}</div></div>
+      <div class="row"><span class="chip ${PRIOS[r.prio].chip}">${PRIOS[r.prio].label}</span><span class="chip ${NEED_STATES[r.estado||"aberta"].chip}">${NEED_STATES[r.estado||"aberta"].label}</span></div></div>`;
+  }).join(""):`<div class="empty"><b>Sem necessidades</b>Não há necessidades para os filtros escolhidos.</div>`;
+  return `<h1>Necessidades</h1><p class="sub">Trabalhe a informação recolhida nas reuniões, por natureza e prioridade.</p>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin:16px 0">${byNature}</div>${compBox}${bar}<div class="list">${listHtml}</div>`;
+}
+
+/* ---------- Gestão (RH) ---------- */
+function viewAdmin(){
+  const cfg=DB.mode==="supabase"?`<span class="chip green">Ligado ao Supabase</span>`:`<span class="chip amber">Demonstração local</span>`;
+  return `<h1>Gestão</h1><p class="sub">Empresas, colaboradores e dados. ${cfg}</p>
+    ${importPanel()}
+    <div class="card pad" style="margin-top:14px"><h2>Empresas (${state.org.companies.length})</h2>
+      <div class="list" style="margin:12px 0">${state.org.companies.length?state.org.companies.map(c=>`<div class="item"><b>${esc(c.name)}</b><span class="chip">${peopleOf(c.id).length} colaboradores</span></div>`).join(""):`<div class="empty" style="padding:18px">Ainda sem empresas.</div>`}</div>
+      <div class="row"><input type="text" id="newCompany" placeholder="Nome de nova empresa" style="max-width:280px"><button class="btn" data-act="add-company">Adicionar empresa</button></div></div>
+    <div class="card pad" style="margin-top:14px"><h2>Adicionar colaborador (individual)</h2>
+      <div class="two" style="margin-top:12px"><div class="field"><label class="f">Nome</label><input type="text" id="pName"></div>
+        <div class="field"><label class="f">Email</label><input type="email" id="pEmail"></div></div>
+      <div class="two"><div class="field"><label class="f">Função</label><input type="text" id="pFunc"></div>
+        <div class="field"><label class="f">Perfil</label><select id="pRole"><option value="trabalhador">Trabalhador</option><option value="chefe">Chefe</option><option value="rh">RH</option></select></div></div>
+      <div class="two"><div class="field"><label class="f">Empresa</label><select id="pCompany">${state.org.companies.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join("")}</select></div>
+        <div class="field"><label class="f">Chefia direta <span class="hint">(opcional)</span></label>
+          <select id="pMgr"><option value="">— sem chefia —</option>${state.org.people.filter(p=>ROLE_RANK[p.role]>=2).map(p=>`<option value="${p.id}">${esc(p.name)} (${esc((companyById(p.companyId)||{}).name||"")})</option>`).join("")}</select></div></div>
+      <button class="btn primary" data-act="add-person">Adicionar colaborador</button></div>
+    <div class="card pad" style="margin-top:14px"><h2>Dados</h2>
+      <div class="row" style="margin-top:12px"><button class="btn" data-act="export-all">Exportar todas as reuniões (CSV)</button>
+        ${DB.mode==="demo"?`<button class="btn danger" data-act="reset-demo">Limpar demonstração</button>`:""}</div></div>`;
+}
+
+/* =====================================================================
+   Ações
+   ===================================================================== */
+function wireTop(){
+  document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>setView(b.dataset.tab,{}));
+  const lo=$("[data-act=logout]");if(lo)lo.onclick=()=>handleAction("logout",lo);
+}
+function wireBody(){
+  const main=$("#main");
+  main.querySelectorAll("[data-act]").forEach(el=>el.onclick=()=>handleAction(el.dataset.act,el));
+  main.querySelectorAll("[data-meeting]").forEach(el=>el.onclick=()=>{startDraft(el.dataset.meeting);setView("meeting");});
+  main.querySelectorAll("[data-consol]").forEach(el=>el.onclick=()=>setView("consolidated",{person:el.dataset.consol}));
+  main.querySelectorAll("[data-editck]").forEach(el=>el.onclick=()=>{const c=findCk(el.dataset.editck);if(c){state.draft=JSON.parse(JSON.stringify(c));setView("meeting");}});
+  main.querySelectorAll("[data-delneed]").forEach(el=>el.onclick=()=>{state.draft.needs=state.draft.needs.filter(n=>n.id!==el.dataset.delneed);$("#needsList").innerHTML=renderNeedsList();wireBody();});
+  main.querySelectorAll("[data-field]").forEach(el=>{const f=el.dataset.field;el.oninput=el.onchange=()=>{if(!state.draft)return;state.draft[f]=(f==="q"||f==="year")?parseInt(el.value,10):el.value;};});
+  const nN=$("#nNature");if(nN)nN.onchange=()=>{const v=NATURES[nN.value];$("#nValueLabel").textContent=v.field;$("#nValue").placeholder=v.placeholder;};
+  const cP=$("#cPerson");if(cP)cP.onchange=()=>setView("consolidated",{...state.params,person:cP.value});
+  const cC=$("#cCompany");if(cC)cC.onchange=()=>setView("consolidated",{company:cC.value||undefined,person:undefined});
+  const fC=$("#fltCompany");if(fC)fC.onchange=()=>setView("team",{company:fC.value||undefined});
+  const nfN=$("#nfNature");if(nfN)nfN.onchange=()=>setView("needs",{...state.params,nature:nfN.value||undefined});
+  const nfE=$("#nfEstado");if(nfE)nfE.onchange=()=>setView("needs",{...state.params,estado:nfE.value||undefined});
+  const nfC=$("#nfCompany");if(nfC)nfC.onchange=()=>setView("needs",{...state.params,company:nfC.value||undefined});
+  main.querySelectorAll(".need-state").forEach(sel=>sel.onchange=async()=>{
+    const c=findCk(sel.dataset.ck);if(!c)return;const n=(c.needs||[]).find(x=>x.id===sel.dataset.need);if(!n)return;
+    n.estado=sel.value;try{await persistAndRefresh(c);toast("Estado atualizado.");}catch(e){toast("Erro ao guardar: "+(e.message||e));}});
+  wireImportPanel(main);
+}
+
+async function handleAction(act,el){
+  const u=state.user;
+  switch(act){
+    /* auth */
+    case"auth-send":{const email=($("#authEmail").value||"").trim();if(!email){toast("Indique o email.");return;}
+      try{const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href.split("#")[0]}});if(error)throw error;
+        state.authEmail=email;state.authSent=true;render();}catch(e){toast("Erro: "+(e.message||e));}break;}
+    case"auth-reset":state.authSent=false;render();break;
+    case"auth-signout":case"logout":
+      if(DB.mode==="supabase"){await sb.auth.signOut();state.user=null;state.authEmail=null;state.authSent=false;setView("login");render();}
+      else{state.user=null;setView("login");render();}break;
+    case"template":await downloadTemplate();break;
+    case"go-picker":setView("login");render();break;
+    case"reconfig":setView("login",{setup:true});render();break;
+    case"reset-demo":if(confirm("Limpar todos os dados da demonstração?")){for(const c of state.org.companies)await STORE.del(K_CK(c.id));await STORE.del(K_ORG);state.org={companies:[],people:[]};state.checkins={};state.user=null;setView("login");render();}break;
+
+    /* reuniões */
+    case"new":{const t=teamOf(u);if(!t.length){toast("Não tem equipa associada.");return;}startDraft(t[0].id);setView("meeting");break;}
+    case"back":setView(ROLE_RANK[u.role]>=2?"team":"home");break;
+    case"addneed":{const nature=$("#nNature").value,value=($("#nValue").value||"").trim(),note=($("#nNote").value||"").trim(),prio=$("#nPrio").value;
+      if(!value){toast("Preencha o campo da necessidade.");$("#nValue").focus();return;}
+      state.draft.needs.push({id:uid(),nature,value,note,prio,estado:"aberta"});
+      $("#nValue").value="";$("#nNote").value="";$("#needsList").innerHTML=renderNeedsList();wireBody();toast("Necessidade adicionada.");break;}
+    case"save":{const d=state.draft;
+      if(!(d.good||"").trim()&&!(d.bad||"").trim()&&!(d.help||"").trim()&&!d.needs.length){toast("Preencha pelo menos uma questão.");return;}
+      d.status=el.dataset.status;
+      try{await persistAndRefresh(d);toast(d.status==="submetida"?"Reunião submetida.":"Rascunho guardado.");setView(ROLE_RANK[u.role]>=2?"team":"home");}
+      catch(e){toast("Erro ao guardar: "+(e.message||e));}break;}
+
+    /* exportações */
+    case"export-person":{const p=personById(state.params.person);exportCSV(csvCheckins((state.checkins[p.companyId]||[]).filter(c=>c.workerId===p.id).sort(sortDesc)),`reunioes_${slug(p.name)}.csv`);break;}
+    case"export-needs":exportCSV(csvNeeds(scopedCheckins(u)),"necessidades.csv");break;
+    case"export-all":{let all=[];state.org.companies.forEach(c=>all=all.concat(state.checkins[c.id]||[]));exportCSV(csvCheckins(all),"reunioes_todas.csv");break;}
+
+    /* gestão */
+    case"add-company":{const n=($("#newCompany").value||"").trim();if(!n){toast("Indique o nome.");return;}try{const c=await DB.addCompany(n);if(!companyById(c.id))state.org.companies.push(c);toast("Empresa adicionada.");render();}catch(e){toast("Erro: "+(e.message||e));}break;}
+    case"add-person":{const name=($("#pName").value||"").trim(),email=($("#pEmail").value||"").trim();
+      if(!name||!email){toast("Indique nome e email.");return;}
+      try{const np=await DB.addPerson({name,email:email.toLowerCase(),func:($("#pFunc").value||"").trim(),role:$("#pRole").value,companyId:$("#pCompany").value,managerId:$("#pMgr").value||null});
+        if(!personById(np.id))state.org.people.push(np);toast("Colaborador adicionado.");render();}catch(e){toast("Erro: "+(e.message||e));}break;}
+  }
+}
+
+/* ---------- CSV ---------- */
+const slug=s=>(s||"x").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_|_$/g,"");
+function csvCell(v){v=(v==null?"":String(v));return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function csvCheckins(list){
+  const head=["Empresa","Trabalhador","Função","Chefia","Ano","Trimestre","Data","Estado","Correu bem","Correu mal","Como ajudar","Nº necessidades"];
+  const rows=list.map(c=>{const w=personById(c.workerId),m=personById(c.managerId);
+    return [(companyById(c.companyId)||{}).name,w&&w.name,w&&w.func,m&&m.name,c.year,"T"+c.q,c.date,c.status,c.good,c.bad,c.help,(c.needs||[]).length].map(csvCell).join(";");});
+  return [head.join(";"),...rows].join("\n");
+}
+function csvNeeds(cks){
+  const head=["Empresa","Trabalhador","Ano","Trimestre","Natureza","Necessidade","Nota","Prioridade","Estado"];
+  const rows=[];cks.forEach(c=>(c.needs||[]).forEach(n=>{const w=personById(c.workerId);
+    rows.push([(companyById(c.companyId)||{}).name,w&&w.name,c.year,"T"+c.q,NATURES[n.nature].label,n.value,n.note,PRIOS[n.prio].label,NEED_STATES[n.estado||"aberta"].label].map(csvCell).join(";"));}));
+  return [head.join(";"),...rows].join("\n");
+}
+function exportCSV(text,filename){const blob=new Blob(["\ufeff"+text],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");}
+
+/* ---------- Arranque ---------- */
+async function handleSession(session){
+  if(!session){state.user=null;state.authEmail=null;setView("login");render();return;}
+  state.authEmail=session.user.email;
+  try{state.user=await DB.loadMe();}catch(e){state.user=null;}
+  if(state.user){await DB.loadAll();setView("home");}
+  render();
+}
+(async function init(){
+  if(CONFIG.SUPABASE_URL&&CONFIG.SUPABASE_ANON_KEY&&window.supabase){
+    DB.mode="supabase";
+    sb=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
+    sb.auth.onAuthStateChange((_e,session)=>{handleSession(session);});
+    const {data}=await sb.auth.getSession();
+    await handleSession(data.session);
+  }else{
+    DB.mode="demo";
+    await DB.loadOrg_demo();
+    render();
+  }
+})();
+</script>
+</body>
+</html>
