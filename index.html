@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Reuniões de Acompanhamento</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
   :root{
     --bg:#eaf1ef; --surface:#ffffff; --surface-2:#f3f7f5;
@@ -100,7 +99,7 @@
   .muted{color:var(--muted)}
   .kbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
   .kbar select,.kbar input{width:auto;min-width:150px}
-  .center{max-width:520px;margin:40px auto 0}
+  .center{max-width:640px;margin:30px auto 0}
 </style>
 </head>
 <body>
@@ -109,14 +108,10 @@
 
 <script>
 /* =====================================================================
-   CONFIGURAÇÃO — preencha com os dados do seu projeto Supabase.
-   (Project Settings -> API). Enquanto estiver em branco, a app corre em
-   modo de demonstração local, para poder testar antes de ligar tudo.
+   Reuniões de Acompanhamento de Desempenho — versão GitHub Pages
+   100% no navegador. Sem servidor, sem Supabase. Os dados ficam guardados
+   neste navegador (localStorage). Cópia de segurança em Gestão -> Dados.
    ===================================================================== */
-const CONFIG = {
-  SUPABASE_URL: "https://sqytqycynivhqkxsbnhc.supabase.co",       // ex.: https://abcdxyz.supabase.co
-  SUPABASE_ANON_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNxeXRxeWN5bml2aHFreHNibmhjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwNTEwNTYsImV4cCI6MjEwNDYyNzA1Nn0.eWyibKtlnt9euWstEtMIn-zw__3a9QEai3NpcJbjPTs",  // chave "anon public"
-};
 
 /* ---------- Domínio ---------- */
 const NATURES = {
@@ -131,9 +126,7 @@ const ROLE={trabalhador:"Trabalhador",chefe:"Chefe",rh:"RH"};
 const ROLE_RANK={trabalhador:1,chefe:2,rh:3};
 
 /* ---------- Estado ---------- */
-const state={view:"login",params:{},user:null,authEmail:null,authSent:false,
-  org:{companies:[],people:[]},checkins:{},draft:null};
-let sb=null;
+const state={view:"login",params:{},user:null,org:{companies:[],people:[]},checkins:{},draft:null};
 
 /* ---------- Utils ---------- */
 const $=(s,r=document)=>r.querySelector(s);
@@ -147,7 +140,6 @@ const qShort=(y,q)=>`T${q} ${y}`;
 const todayISO=()=>new Date().toISOString().slice(0,10);
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove("show"),2600);}
 function normRole(v){const n=norm(v);if(n.startsWith("rh")||n.includes("recursos"))return"rh";if(n.startsWith("chef")||n.includes("gestor")||n.includes("manager")||n.includes("diretor"))return"chefe";return"trabalhador";}
-function chunk(a,n){const o=[];for(let i=0;i<a.length;i+=n)o.push(a.slice(i,i+n));return o;}
 
 /* ---------- Consultas em memória ---------- */
 const companyById=id=>state.org.companies.find(c=>c.id===id);
@@ -173,13 +165,14 @@ function visiblePeople(u){
 function canManage(u,worker){if(!worker)return false;return u.role==="rh"||(ROLE_RANK[u.role]>=2&&worker.managerId===u.id);}
 
 /* =====================================================================
-   Camada de dados — Supabase ou demonstração local
+   Armazenamento local (localStorage no GitHub; memória se indisponível)
    ===================================================================== */
-const STORE=(()=>{ // apenas para o modo demonstração
+const STORE=(()=>{
   const mem=new Map();
-  const hasWS=(typeof window!=="undefined"&&window.storage&&typeof window.storage.get==="function");
+  const hasWS=(typeof window!=="undefined"&&window.storage&&typeof window.storage.get==="function"); // pré-visualização
   const ls=(()=>{try{const k="__t";window["localStorage"].setItem(k,"1");window["localStorage"].removeItem(k);return window["localStorage"];}catch(e){return null;}})();
   return{
+    kind:hasWS?"preview":(ls?"navegador":"memória"),
     async get(k){if(hasWS){try{const r=await window.storage.get(k,true);return r?JSON.parse(r.value):null;}catch(e){return null;}}if(ls){const v=ls.getItem(k);return v?JSON.parse(v):null;}return mem.has(k)?mem.get(k):null;},
     async set(k,v){const s=JSON.stringify(v);if(hasWS){try{await window.storage.set(k,s,true);return;}catch(e){}}if(ls){ls.setItem(k,s);return;}mem.set(k,v);},
     async del(k){if(hasWS){try{await window.storage.delete(k,true);}catch(e){}return;}if(ls){ls.removeItem(k);return;}mem.delete(k);}
@@ -187,62 +180,21 @@ const STORE=(()=>{ // apenas para o modo demonstração
 })();
 const K_ORG="pda:org",K_CK=cid=>"pda:ck:"+cid;
 
-/* mapeadores Supabase <-> app */
-const rowToPerson=r=>({id:r.id,name:r.full_name,email:r.email,func:r.job_title,role:r.role,companyId:r.company_id,managerId:r.manager_id,managerEmail:r.manager_email});
-const rowToCk=r=>({id:r.id,companyId:r.company_id,workerId:r.worker_id,managerId:r.manager_id,year:r.year,q:r.quarter,date:r.meeting_date,status:r.status,good:r.good||"",bad:r.bad||"",help:r.help||"",needs:r.needs||[],updatedAt:r.updated_at});
-const ckToRow=c=>({id:c.id,company_id:c.companyId,worker_id:c.workerId,manager_id:c.managerId,year:c.year,quarter:c.q,meeting_date:c.date||null,status:c.status,good:c.good,bad:c.bad,help:c.help,needs:c.needs,updated_at:new Date().toISOString()});
-
+/* ---------- Camada de dados ---------- */
 const DB={
-  mode:"demo",
-
-  /* ----- Supabase ----- */
-  async loadMe(){
-    try{await sb.rpc("link_me");}catch(e){}
-    const {data,error}=await sb.from("people").select("*").eq("user_id",(await sb.auth.getUser()).data.user.id).maybeSingle();
-    if(error)throw error;return data?rowToPerson(data):null;
+  async loadAll(){
+    state.org=(await STORE.get(K_ORG))||{companies:[],people:[]};
+    state.checkins={};
+    for(const c of state.org.companies){state.checkins[c.id]=(await STORE.get(K_CK(c.id)))||[];}
   },
-  async loadOrg_sb(){
-    const {data:comps,error:e1}=await sb.from("companies").select("*").order("name");if(e1)throw e1;
-    const {data:ppl,error:e2}=await sb.from("people").select("*").order("full_name");if(e2)throw e2;
-    return {companies:(comps||[]).map(c=>({id:c.id,name:c.name})),people:(ppl||[]).map(rowToPerson)};
-  },
-  async loadCheckins_sb(){
-    let all=[],from=0,size=1000;
-    while(true){
-      const {data,error}=await sb.from("checkins").select("*").order("year",{ascending:false}).range(from,from+size-1);
-      if(error)throw error;all=all.concat(data||[]);
-      if(!data||data.length<size)break;from+=size;
-    }
-    return all.map(rowToCk);
-  },
-  async saveCheckin_sb(c){
-    const uid_=(await sb.auth.getUser()).data.user.id;
-    const row=ckToRow(c);row.created_by=uid_;
-    const {data,error}=await sb.from("checkins").upsert(row,{onConflict:"worker_id,year,quarter"}).select().single();
-    if(error)throw error;return rowToCk(data);
-  },
-  async addCompany_sb(name){const {data,error}=await sb.from("companies").insert({name}).select().single();if(error)throw error;return {id:data.id,name:data.name};},
-  async addPerson_sb(p){const {data,error}=await sb.from("people").insert({full_name:p.name,email:p.email,job_title:p.func,role:p.role,company_id:p.companyId,manager_id:p.managerId}).select().single();if(error)throw error;return rowToPerson(data);},
-  async importRoster_sb(rows){
-    const names=[...new Set(rows.map(r=>r.empresa).filter(Boolean))];
-    if(names.length){const {error}=await sb.from("companies").upsert(names.map(n=>({name:n})),{onConflict:"name"});if(error)throw error;}
-    const {data:comps}=await sb.from("companies").select("id,name");
-    const cmap={};(comps||[]).forEach(c=>cmap[norm(c.name)]=c.id);
-    const prows=rows.map(r=>({email:norm(r.email),full_name:r.nome,job_title:r.funcao||null,role:normRole(r.perfil),company_id:cmap[norm(r.empresa)]||null,manager_email:r.email_chefia?norm(r.email_chefia):null}));
-    for(const part of chunk(prows,400)){const {error}=await sb.from("people").upsert(part,{onConflict:"email"});if(error)throw error;}
-    const {error:re}=await sb.rpc("resolve_managers");if(re)throw re;
-  },
-
-  /* ----- Demonstração local ----- */
-  async loadOrg_demo(){state.org=(await STORE.get(K_ORG))||{companies:[],people:[]};},
-  async saveOrg_demo(){await STORE.set(K_ORG,state.org);},
-  async saveCheckin_demo(c){
+  async saveOrg(){await STORE.set(K_ORG,state.org);},
+  async saveCheckin(c){
     const arr=ckBucket(c.companyId);
     const i=arr.findIndex(x=>x.id===c.id||(x.workerId===c.workerId&&x.year===c.year&&x.q===c.q));
     if(i>=0)arr[i]=c;else arr.push(c);
     await STORE.set(K_CK(c.companyId),arr);return c;
   },
-  async importRoster_demo(rows){
+  async importRoster(rows){
     rows.forEach(r=>{
       const cname=(r.empresa||"").trim();
       let comp=state.org.companies.find(c=>norm(c.name)===norm(cname));
@@ -252,34 +204,24 @@ const DB={
       const base={name:r.nome,func:r.funcao||"",role:normRole(r.perfil),companyId:comp?comp.id:null,email,managerEmail:r.email_chefia?norm(r.email_chefia):null};
       if(p)Object.assign(p,base);else{p={id:uid(),...base,managerId:null};state.org.people.push(p);}
     });
-    state.org.people.forEach(p=>{p.managerId=p.managerEmail?(personByEmail(p.managerEmail)||{}).id||null:null;});
-    await this.saveOrg_demo();
+    state.org.people.forEach(p=>{p.managerId=p.managerEmail?((personByEmail(p.managerEmail)||{}).id||null):null;});
+    await this.saveOrg();
   },
-  async addCompany_demo(name){const c={id:uid(),name};state.org.companies.push(c);await this.saveOrg_demo();return c;},
-  async addPerson_demo(p){const np={id:uid(),...p};state.org.people.push(np);await this.saveOrg_demo();return np;},
-
-  /* ----- fachada ----- */
-  async loadAll(){
-    if(this.mode==="supabase"){
-      state.org=await this.loadOrg_sb();
-      state.checkins={};(await this.loadCheckins_sb()).forEach(c=>ckBucket(c.companyId).push(c));
-    }else{
-      await this.loadOrg_demo();
-      state.checkins={};
-      for(const c of state.org.companies){state.checkins[c.id]=(await STORE.get(K_CK(c.id)))||[];}
-    }
-  },
-  async saveCheckin(c){return this.mode==="supabase"?this.saveCheckin_sb(c):this.saveCheckin_demo(c);},
-  async importRoster(rows){return this.mode==="supabase"?this.importRoster_sb(rows):this.importRoster_demo(rows);},
-  async addCompany(n){return this.mode==="supabase"?this.addCompany_sb(n):this.addCompany_demo(n);},
-  async addPerson(p){return this.mode==="supabase"?this.addPerson_sb(p):this.addPerson_demo(p);},
+  async addCompany(name){const c={id:uid(),name};state.org.companies.push(c);await this.saveOrg();return c;},
+  async addPerson(p){const np={id:uid(),...p};state.org.people.push(np);await this.saveOrg();return np;},
+  async restore(data){
+    state.org=data.org||{companies:[],people:[]};
+    await STORE.set(K_ORG,state.org);
+    const cks=data.checkins||{};
+    state.checkins={};
+    for(const c of state.org.companies){state.checkins[c.id]=cks[c.id]||[];await STORE.set(K_CK(c.id),state.checkins[c.id]);}
+  }
 };
 
 /* =====================================================================
    Render / routing
    ===================================================================== */
 function setView(v,params={}){state.view=v;state.params=params;render();window.scrollTo(0,0);}
-async function persistAndRefresh(c){const saved=await DB.saveCheckin(c);const arr=ckBucket(saved.companyId);const i=arr.findIndex(x=>x.id===saved.id||(x.workerId===saved.workerId&&x.year===saved.year&&x.q===saved.q));if(i>=0)arr[i]=saved;else arr.push(saved);return saved;}
 
 function render(){
   const app=$("#app");
@@ -288,65 +230,33 @@ function render(){
   wireTop();wireBody();
 }
 
-/* ---------- Ecrãs de entrada ---------- */
+/* ---------- Entrada ---------- */
 function routeAuth(){
-  if(DB.mode==="supabase"){
-    if(state.authEmail&&!state.user)return viewUnlinked();
-    return viewAuthLogin();
-  }
-  // demo
   if(state.org.people.length===0||state.params.setup)return viewSetup();
-  return viewDemoPicker();
-}
-function viewAuthLogin(){
-  return `<div class="center">
-    <div style="display:flex;align-items:center;gap:12px;margin:0 0 8px">
-      <span class="dot" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block"></span>
-      <h1 style="margin:0">Reuniões de Acompanhamento</h1></div>
-    <p class="sub" style="margin-bottom:22px">Gestão de desempenho · Blue &amp; Green</p>
-    <div class="card pad">
-      ${state.authSent?`
-        <h2>Verifique o seu email</h2>
-        <p class="sub" style="margin-top:6px">Enviámos um link de acesso para <b>${esc(state.authEmail)}</b>. Abra-o neste dispositivo para entrar.</p>
-        <button class="btn ghost sm" data-act="auth-reset" style="margin-top:14px">Usar outro email</button>`
-      :`
-        <label class="f">Email de trabalho</label>
-        <input type="email" id="authEmail" placeholder="nome@empresa.pt" value="${esc(state.authEmail||"")}">
-        <button class="btn primary" data-act="auth-send" style="margin-top:14px;width:100%">Receber link de acesso</button>
-        <p class="hint" style="margin-top:12px">Vai receber um email com um link para entrar, sem palavra-passe.</p>`}
-    </div></div>`;
-}
-function viewUnlinked(){
-  return `<div class="center"><div class="card pad">
-    <h2>Conta ainda não associada</h2>
-    <p class="sub" style="margin-top:6px">Entrou com <b>${esc(state.authEmail)}</b>, mas este email ainda não consta na lista de colaboradores. Peça ao RH para o incluir.</p>
-    <button class="btn" data-act="auth-signout" style="margin-top:16px">Sair</button>
-  </div></div>`;
+  return viewPicker();
 }
 function viewSetup(){
-  return `<div class="center" style="max-width:640px">
+  return `<div class="center">
     <div style="display:flex;align-items:center;gap:12px;margin:0 0 6px">
       <span class="dot" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block"></span>
       <h1 style="margin:0">Configuração inicial</h1></div>
-    <p class="sub">Modo de demonstração local (sem Supabase configurado). Carregue a lista de colaboradores por Excel para começar a testar.</p>
-    <div class="banner info" style="margin:14px 0">Para produção, preencha <b>CONFIG</b> no topo do ficheiro com o URL e a chave do seu projeto Supabase. Veja o guia passo a passo.</div>
+    <p class="sub">Carregue a lista de colaboradores por Excel para começar. Os dados ficam guardados neste navegador.</p>
     ${importPanel()}
     ${state.org.people.length?`<button class="btn primary" data-act="go-picker" style="margin-top:14px">Continuar (${state.org.people.length} colaboradores)</button>`:""}
   </div>`;
 }
-function viewDemoPicker(){
+function viewPicker(){
   const byCompany=state.org.companies.map(c=>{
     const ppl=peopleOf(c.id);if(!ppl.length)return"";
     return `<div class="section-title" style="margin-top:22px">${esc(c.name)}</div><div class="list">${ppl.map(personCardBtn).join("")}</div>`;
   }).join("");
-  return `<div class="app"><div style="max-width:640px;margin:0 auto">
+  return `<div style="max-width:640px;margin:0 auto">
     <div style="display:flex;align-items:center;gap:12px;margin:30px 0 6px">
       <span class="dot" style="width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,var(--teal),var(--green));display:inline-block"></span>
       <h1 style="margin:0">Reuniões de Acompanhamento</h1></div>
-    <p class="sub">Modo de demonstração — escolha com quem quer entrar para experimentar cada perfil.
-      <a href="#" data-act="reconfig">Importar mais colaboradores</a></p>
+    <p class="sub">Escolha com quem quer entrar. <a href="#" data-act="reconfig">Importar mais colaboradores</a></p>
     ${byCompany}
-  </div></div>`;
+  </div>`;
 }
 function personCardBtn(p){
   const c=companyById(p.companyId);
@@ -357,11 +267,11 @@ function personCardBtn(p){
 function wireAuth(){
   const app=$("#app");
   app.querySelectorAll("[data-act]").forEach(el=>el.onclick=e=>{e.preventDefault();handleAction(el.dataset.act,el);});
-  app.querySelectorAll("[data-login]").forEach(b=>b.onclick=async()=>{state.user=personById(b.dataset.login);await DB.loadAll();setView("home");});
+  app.querySelectorAll("[data-login]").forEach(b=>b.onclick=async()=>{state.user=personById(b.dataset.login);setView("home");});
   wireImportPanel(app);
 }
 
-/* ---------- Painel de importação (reutilizado) ---------- */
+/* ---------- Painel de importação ---------- */
 function importPanel(){
   return `<div class="card pad" style="margin-top:14px">
     <h2>Importar colaboradores (Excel)</h2>
@@ -374,19 +284,15 @@ function importPanel(){
     <div id="importResult" style="margin-top:12px"></div>
   </div>`;
 }
-function wireImportPanel(root){
-  const f=root.querySelector("#xlsxFile");
-  if(f)f.onchange=e=>handleImportFile(e.target.files[0]);
-}
+function wireImportPanel(root){const f=root.querySelector("#xlsxFile");if(f)f.onchange=e=>handleImportFile(e.target.files[0]);}
 async function handleImportFile(file){
   if(!file)return;
   const res=$("#importResult");res.innerHTML=`<span class="chip amber">A ler ${esc(file.name)}…</span>`;
   try{
     const buf=await file.arrayBuffer();
     const wb=XLSX.read(buf,{type:"array"});
-    const ws=wb.Sheets[wb.SheetNames[0]];
-    const json=XLSX.utils.sheet_to_json(ws,{defval:""});
-    const rows=[];const warn=[];
+    const json=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:""});
+    const rows=[],warn=[];
     json.forEach(raw=>{
       const r={};for(const k in raw){const nk=norm(k);
         if(nk.includes("chefia")||nk.includes("gestor")||nk.includes("manager"))r.email_chefia=raw[k];
@@ -395,22 +301,19 @@ async function handleImportFile(file){
         else if(nk.includes("nome"))r.nome=raw[k];
         else if(nk.includes("funcao")||nk.includes("cargo"))r.funcao=raw[k];
         else if(nk.includes("perfil")||nk.includes("role")||nk.includes("tipo"))r.perfil=raw[k];}
-      if(norm(r.nome).includes("nome completo")||norm(r.email).includes("chave de login"))return; // linha de ajuda
+      if(norm(r.nome).includes("nome completo")||norm(r.email).includes("chave de login"))return;
       if(r.nome&&r.email)rows.push(r);
     });
     if(!rows.length){res.innerHTML=`<div class="banner">Não foram encontradas linhas válidas. Confirme que existem colunas <b>nome</b> e <b>email</b>.</div>`;return;}
     const emails=new Set(rows.map(r=>norm(r.email)));
     rows.forEach(r=>{if(r.email_chefia&&!emails.has(norm(r.email_chefia))&&!personByEmail(r.email_chefia))warn.push(norm(r.email_chefia));});
-    res.innerHTML=`<span class="chip amber">A carregar ${rows.length} colaboradores…</span>`;
     await DB.importRoster(rows);
     await DB.loadAll();
-    const w=warn.length?`<div class="banner" style="margin-top:8px">${warn.length} chefia(s) indicada(s) por email não foram encontradas e ficaram sem ligação: ${esc([...new Set(warn)].slice(0,5).join(", "))}${warn.length>5?"…":""}</div>`:"";
+    const w=warn.length?`<div class="banner" style="margin-top:8px">${warn.length} chefia(s) por email não encontradas: ${esc([...new Set(warn)].slice(0,5).join(", "))}${warn.length>5?"…":""}</div>`:"";
     res.innerHTML=`<div class="banner info">Importados ${rows.length} colaboradores em ${state.org.companies.length} empresa(s).</div>${w}`;
     toast("Importação concluída.");
-    if(state.user)render();else if(DB.mode==="demo")setTimeout(()=>render(),400);
-  }catch(err){
-    res.innerHTML=`<div class="banner">Falha na importação: ${esc(err.message||err)}</div>`;
-  }
+    if(state.user)render();else setTimeout(()=>render(),500);
+  }catch(err){res.innerHTML=`<div class="banner">Falha na importação: ${esc(err.message||err)}</div>`;}
 }
 async function downloadTemplate(){
   const ws=XLSX.utils.aoa_to_sheet([
@@ -433,15 +336,13 @@ function topbar(){
   tabs.push(["mine","As minhas reuniões"]);tabs.push(["consolidated","Consolidado"]);
   if(ROLE_RANK[u.role]>=2)tabs.push(["needs","Necessidades"]);
   if(u.role==="rh")tabs.push(["admin","Gestão"]);
-  const demoBanner=DB.mode==="demo"?`<div class="banner">Modo de demonstração. Ligue o Supabase (CONFIG no topo do ficheiro) para uso real com autenticação.</div>`:"";
   return `<div class="topbar"><div class="topbar-in">
       <div class="brand"><span class="dot"></span><div>Reuniões de Acompanhamento<small>Blue &amp; Green · Gestão de desempenho</small></div></div>
       <div class="who"><div class="name" style="text-align:right">${esc(u.name)}<span>${esc((c?c.name+" · ":"")+ROLE[u.role])}</span></div>
         <div class="avatar">${initials(u.name)}</div>
-        <button class="btn ghost sm" data-act="logout">${DB.mode==="supabase"?"Sair":"Trocar"}</button></div>
+        <button class="btn ghost sm" data-act="logout">Trocar</button></div>
     </div>
-    <nav class="tabs">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${state.view===k?'active':''}">${l}</button>`).join("")}</nav>
-    ${demoBanner}</div>`;
+    <nav class="tabs">${tabs.map(([k,l])=>`<button data-tab="${k}" class="${state.view===k?'active':''}">${l}</button>`).join("")}</nav></div>`;
 }
 function routeBody(){switch(state.view){
   case"home":return viewHome();case"team":return viewTeam();case"mine":return viewMine();
@@ -620,8 +521,7 @@ function viewNeeds(){
 
 /* ---------- Gestão (RH) ---------- */
 function viewAdmin(){
-  const cfg=DB.mode==="supabase"?`<span class="chip green">Ligado ao Supabase</span>`:`<span class="chip amber">Demonstração local</span>`;
-  return `<h1>Gestão</h1><p class="sub">Empresas, colaboradores e dados. ${cfg}</p>
+  return `<h1>Gestão</h1><p class="sub">Empresas, colaboradores e cópias de segurança.</p>
     ${importPanel()}
     <div class="card pad" style="margin-top:14px"><h2>Empresas (${state.org.companies.length})</h2>
       <div class="list" style="margin:12px 0">${state.org.companies.length?state.org.companies.map(c=>`<div class="item"><b>${esc(c.name)}</b><span class="chip">${peopleOf(c.id).length} colaboradores</span></div>`).join(""):`<div class="empty" style="padding:18px">Ainda sem empresas.</div>`}</div>
@@ -636,8 +536,17 @@ function viewAdmin(){
           <select id="pMgr"><option value="">— sem chefia —</option>${state.org.people.filter(p=>ROLE_RANK[p.role]>=2).map(p=>`<option value="${p.id}">${esc(p.name)} (${esc((companyById(p.companyId)||{}).name||"")})</option>`).join("")}</select></div></div>
       <button class="btn primary" data-act="add-person">Adicionar colaborador</button></div>
     <div class="card pad" style="margin-top:14px"><h2>Dados</h2>
-      <div class="row" style="margin-top:12px"><button class="btn" data-act="export-all">Exportar todas as reuniões (CSV)</button>
-        ${DB.mode==="demo"?`<button class="btn danger" data-act="reset-demo">Limpar demonstração</button>`:""}</div></div>`;
+      <p class="sub" style="margin-top:4px">Os dados ficam neste navegador (${esc(STORE.kind)}). Faça cópias de segurança e use-as para levar tudo para outro computador.</p>
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" data-act="backup">Exportar cópia de segurança</button>
+        <label class="btn" style="cursor:pointer">Restaurar cópia…<input type="file" id="backupFile" accept=".json" style="display:none"></label>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" data-act="export-all">Exportar reuniões (CSV)</button>
+        <button class="btn danger" data-act="reset">Limpar tudo</button>
+      </div>
+      <div class="banner" style="margin-top:12px">Se limpar os dados do navegador (histórico/cookies) sem ter uma cópia de segurança, os registos perdem-se. Exporte com regularidade.</div>
+    </div>`;
 }
 
 /* =====================================================================
@@ -664,27 +573,21 @@ function wireBody(){
   const nfC=$("#nfCompany");if(nfC)nfC.onchange=()=>setView("needs",{...state.params,company:nfC.value||undefined});
   main.querySelectorAll(".need-state").forEach(sel=>sel.onchange=async()=>{
     const c=findCk(sel.dataset.ck);if(!c)return;const n=(c.needs||[]).find(x=>x.id===sel.dataset.need);if(!n)return;
-    n.estado=sel.value;try{await persistAndRefresh(c);toast("Estado atualizado.");}catch(e){toast("Erro ao guardar: "+(e.message||e));}});
+    n.estado=sel.value;await DB.saveCheckin(c);toast("Estado atualizado.");});
+  const bf=main.querySelector("#backupFile");if(bf)bf.onchange=e=>handleRestoreFile(e.target.files[0]);
   wireImportPanel(main);
 }
 
 async function handleAction(act,el){
   const u=state.user;
   switch(act){
-    /* auth */
-    case"auth-send":{const email=($("#authEmail").value||"").trim();if(!email){toast("Indique o email.");return;}
-      try{const {error}=await sb.auth.signInWithOtp({email,options:{emailRedirectTo:window.location.href.split("#")[0]}});if(error)throw error;
-        state.authEmail=email;state.authSent=true;render();}catch(e){toast("Erro: "+(e.message||e));}break;}
-    case"auth-reset":state.authSent=false;render();break;
-    case"auth-signout":case"logout":
-      if(DB.mode==="supabase"){await sb.auth.signOut();state.user=null;state.authEmail=null;state.authSent=false;setView("login");render();}
-      else{state.user=null;setView("login");render();}break;
+    case"logout":state.user=null;setView("login");render();break;
     case"template":await downloadTemplate();break;
     case"go-picker":setView("login");render();break;
     case"reconfig":setView("login",{setup:true});render();break;
-    case"reset-demo":if(confirm("Limpar todos os dados da demonstração?")){for(const c of state.org.companies)await STORE.del(K_CK(c.id));await STORE.del(K_ORG);state.org={companies:[],people:[]};state.checkins={};state.user=null;setView("login");render();}break;
+    case"backup":await exportBackup();break;
+    case"reset":if(confirm("Limpar TODOS os dados deste navegador? Faça primeiro uma cópia de segurança.")){for(const c of state.org.companies)await STORE.del(K_CK(c.id));await STORE.del(K_ORG);state.org={companies:[],people:[]};state.checkins={};state.user=null;setView("login");render();}break;
 
-    /* reuniões */
     case"new":{const t=teamOf(u);if(!t.length){toast("Não tem equipa associada.");return;}startDraft(t[0].id);setView("meeting");break;}
     case"back":setView(ROLE_RANK[u.role]>=2?"team":"home");break;
     case"addneed":{const nature=$("#nNature").value,value=($("#nValue").value||"").trim(),note=($("#nNote").value||"").trim(),prio=$("#nPrio").value;
@@ -693,22 +596,38 @@ async function handleAction(act,el){
       $("#nValue").value="";$("#nNote").value="";$("#needsList").innerHTML=renderNeedsList();wireBody();toast("Necessidade adicionada.");break;}
     case"save":{const d=state.draft;
       if(!(d.good||"").trim()&&!(d.bad||"").trim()&&!(d.help||"").trim()&&!d.needs.length){toast("Preencha pelo menos uma questão.");return;}
-      d.status=el.dataset.status;
-      try{await persistAndRefresh(d);toast(d.status==="submetida"?"Reunião submetida.":"Rascunho guardado.");setView(ROLE_RANK[u.role]>=2?"team":"home");}
-      catch(e){toast("Erro ao guardar: "+(e.message||e));}break;}
+      d.status=el.dataset.status;d.updatedAt=new Date().toISOString();
+      await DB.saveCheckin(d);toast(d.status==="submetida"?"Reunião submetida.":"Rascunho guardado.");setView(ROLE_RANK[u.role]>=2?"team":"home");break;}
 
-    /* exportações */
     case"export-person":{const p=personById(state.params.person);exportCSV(csvCheckins((state.checkins[p.companyId]||[]).filter(c=>c.workerId===p.id).sort(sortDesc)),`reunioes_${slug(p.name)}.csv`);break;}
     case"export-needs":exportCSV(csvNeeds(scopedCheckins(u)),"necessidades.csv");break;
     case"export-all":{let all=[];state.org.companies.forEach(c=>all=all.concat(state.checkins[c.id]||[]));exportCSV(csvCheckins(all),"reunioes_todas.csv");break;}
 
-    /* gestão */
-    case"add-company":{const n=($("#newCompany").value||"").trim();if(!n){toast("Indique o nome.");return;}try{const c=await DB.addCompany(n);if(!companyById(c.id))state.org.companies.push(c);toast("Empresa adicionada.");render();}catch(e){toast("Erro: "+(e.message||e));}break;}
+    case"add-company":{const n=($("#newCompany").value||"").trim();if(!n){toast("Indique o nome.");return;}await DB.addCompany(n);toast("Empresa adicionada.");render();break;}
     case"add-person":{const name=($("#pName").value||"").trim(),email=($("#pEmail").value||"").trim();
       if(!name||!email){toast("Indique nome e email.");return;}
-      try{const np=await DB.addPerson({name,email:email.toLowerCase(),func:($("#pFunc").value||"").trim(),role:$("#pRole").value,companyId:$("#pCompany").value,managerId:$("#pMgr").value||null});
-        if(!personById(np.id))state.org.people.push(np);toast("Colaborador adicionado.");render();}catch(e){toast("Erro: "+(e.message||e));}break;}
+      await DB.addPerson({name,email:email.toLowerCase(),func:($("#pFunc").value||"").trim(),role:$("#pRole").value,companyId:$("#pCompany").value,managerId:$("#pMgr").value||null});
+      toast("Colaborador adicionado.");render();break;}
   }
+}
+
+/* ---------- Cópia de segurança ---------- */
+async function exportBackup(){
+  const data={app:"reunioes-acompanhamento",version:1,exportedAt:new Date().toISOString(),org:state.org,checkins:state.checkins};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+  a.download="copia_reunioes_"+todayISO().replace(/-/g,"")+".json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("Cópia exportada.");
+}
+async function handleRestoreFile(file){
+  if(!file)return;
+  try{
+    const text=await file.text();const data=JSON.parse(text);
+    if(!data.org||!Array.isArray(data.org.people))throw new Error("Ficheiro não reconhecido.");
+    if(!confirm(`Restaurar esta cópia? Substitui os dados atuais por ${data.org.people.length} colaboradores e as respetivas reuniões.`))return;
+    await DB.restore(data);await DB.loadAll();
+    toast("Cópia restaurada.");render();
+  }catch(err){toast("Falha ao restaurar: "+(err.message||err));}
 }
 
 /* ---------- CSV ---------- */
@@ -729,26 +648,7 @@ function csvNeeds(cks){
 function exportCSV(text,filename){const blob=new Blob(["\ufeff"+text],{type:"text/csv;charset=utf-8"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);toast("CSV exportado.");}
 
 /* ---------- Arranque ---------- */
-async function handleSession(session){
-  if(!session){state.user=null;state.authEmail=null;setView("login");render();return;}
-  state.authEmail=session.user.email;
-  try{state.user=await DB.loadMe();}catch(e){state.user=null;}
-  if(state.user){await DB.loadAll();setView("home");}
-  render();
-}
-(async function init(){
-  if(CONFIG.SUPABASE_URL&&CONFIG.SUPABASE_ANON_KEY&&window.supabase){
-    DB.mode="supabase";
-    sb=window.supabase.createClient(CONFIG.SUPABASE_URL,CONFIG.SUPABASE_ANON_KEY);
-    sb.auth.onAuthStateChange((_e,session)=>{handleSession(session);});
-    const {data}=await sb.auth.getSession();
-    await handleSession(data.session);
-  }else{
-    DB.mode="demo";
-    await DB.loadOrg_demo();
-    render();
-  }
-})();
+(async function init(){await DB.loadAll();render();})();
 </script>
 </body>
 </html>
